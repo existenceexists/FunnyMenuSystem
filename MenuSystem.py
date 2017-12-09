@@ -23,8 +23,11 @@ except AttributeError: Arrow        = "»"
 
 def init():
     global DISPLAY,DISPLAYRECT
-    DISPLAY      = display.get_surface()
-    if not DISPLAY: raise AttributeError('set video before init MenuSystem')
+    screen      = display.get_surface()
+    if not screen: raise AttributeError('set video before init MenuSystem')
+    screen_rect  = screen.get_rect()
+    DISPLAY=Surface((screen_rect.width,screen_rect.height))
+    DISPLAY.fill(Color(0,0,0,0))
     DISPLAYRECT  = DISPLAY.get_rect()
 
 class Menu(Rect,object):
@@ -118,7 +121,7 @@ class Menu(Rect,object):
                         self.index = (y-self.itemsrect.top) // self.lineheight
                         return True
 
-    def draw(self):
+    def _draw(self):
         self.bg = DISPLAY.subsurface(self).copy()
         clipxy = DISPLAY.get_clip()
         DISPLAY.set_clip(self)
@@ -175,7 +178,7 @@ class MenuSystem(list,object):
         self.boxindex = None
         self.choice  = None
         event.pump()
-        menu.draw()
+        menu._draw()
         self.update(event.Event(MOUSEMOTION,{'pos':mouse.get_pos()}))
         return ret+[menu]
 
@@ -209,17 +212,17 @@ class MenuSystem(list,object):
                         return self.clear()
                     if box.update(ev) or (len(self)-1 != boxindexlist[-1] and self[-1].index != None):
                         ret = [self.pop().clear()for _ in range(self.boxindex+1,len(self))]+[box.clear()]
-                        box.draw()
+                        box._draw()
                         if not box.exc_index:
                             if callable(box.choice):
                                 dyn = box.choice()
                                 dyn.set_at(*box.hlRect.inflate(2,2).topright)
                                 self.append(dyn)
-                                return ret+[dyn.draw()]
+                                return ret+[dyn._draw()]
                             if isinstance(box.choice,Menu):
                                 box.choice.set_at(*box.hlRect.inflate(2,2).topright)
                                 self.append(box.choice)
-                                return ret+[box.choice.draw()]
+                                return ret+[box.choice._draw()]
                         return ret
 
                 else:
@@ -229,13 +232,13 @@ class MenuSystem(list,object):
                     if self[-1].index != None:
                         self[-1].index = None
                         self[-1].clear()
-                        self[-1].draw()
+                        self[-1]._draw()
                         return [self[-1]]
         return []
 
     def redraw(self):
         for menu in self:
-            menu.draw()
+            menu._draw()
             return self
 
 class MenuFix(MenuSystem,object):
@@ -246,7 +249,7 @@ class MenuFix(MenuSystem,object):
             self.boxindex = None
             self[0].index = None
             self[0].clear()
-            return ret+[self[0].draw()]
+            return ret+[self[0]._draw()]
         return []
 
 class MenuBar(MenuSystem,object):
@@ -266,7 +269,7 @@ class MenuBar(MenuSystem,object):
                 self.rects.append(Rect(x,0,w+self.lineheigth,h))
                 x = self.rects[-1].right
         self.index = -1
-        self.draw()
+        self._draw()
         self.choice = None
         return self.rect
 
@@ -285,16 +288,16 @@ class MenuBar(MenuSystem,object):
                         if not ret:
                             ret = super(MenuBar,self).set(self.menuboxlist[self.index],self.rects[self.index].bottomleft)
                     elif ret:
-                        ret += [self.draw()]
+                        ret += [self._draw()]
                 index = Rect(ev.pos,(0,0)).collidelist(self.rects)
                 if index != self.index:
                     if not self:
                         self.index = index
-                        ret += [self.draw()]
+                        ret += [self._draw()]
                     elif index > -1:
                         self.index = index
                         ret = self.clear()
-                        ret += [self.draw()]
+                        ret += [self._draw()]
                         ret += super(MenuBar,self).set(self.menuboxlist[self.index],self.rects[self.index].bottomleft)
             return ret
 
@@ -302,7 +305,7 @@ class MenuBar(MenuSystem,object):
         DISPLAY.blit(self.bg,self.rect)
         return self.rect
 
-    def draw(self):
+    def _draw(self):
         DISPLAY.blit(self.bg,self.rect)
         gfxdraw.box(DISPLAY,self.rect,BGCOLOR)
         gfxdraw.vline(DISPLAY,self.rect.left,self.rect.top,self.rect.bottom-1,BORDER_LEFT)
@@ -315,6 +318,9 @@ class MenuBar(MenuSystem,object):
         for item in self.menuboxlist:
             x = DISPLAY.blit(FONT.render(item.label,1,FGCOLOR),(x,self.rect.y)).right+self.lineheigth
         return self.rect
+
+    def draw(self,surface):
+      surface.blit(DISPLAY,(0,0))
 
 
 class MenuChoice(MenuSystem,object):
@@ -334,7 +340,7 @@ class MenuChoice(MenuSystem,object):
         self.index = -1
         #self.update(event.Event(MOUSEMOTION,{'pos':mouse.get_pos()}))
         self.mouse_in = self.rect.collidepoint(mouse.get_pos())
-        self.draw()
+        self._draw()
         self.choice = None
         return self.rect
 
@@ -347,12 +353,12 @@ class MenuChoice(MenuSystem,object):
             t = self.mouse_in
             self.mouse_in = self.rect.collidepoint(ev.pos)
             if (t != self.mouse_in or ret) and not self:
-                ret += [self.draw()]
+                ret += [self._draw()]
             if ev.type == MOUSEBUTTONUP and ev.button == 1 and self.mouse_in and not ret:
                 ret = super(MenuChoice,self).set(self.menu,self.rect.bottomleft,w=self.wd,force_pos=True)
         return ret
 
-    def draw(self):
+    def _draw(self):
         DISPLAY.blit(self.bg,self.rect)
         gfxdraw.box(DISPLAY,self.rect,BGCOLOR)
         gfxdraw.vline(DISPLAY,self.rect.left,self.rect.top,self.rect.bottom-1,BORDER_LEFT)
@@ -387,27 +393,27 @@ class Button(Rect,object):
                     self._over = True
                     if ev.buttons[0]:
                         self.pressed = True
-                    self.draw()
+                    self._draw()
                     return True
                 elif self._over and not self.collidepoint(ev.pos):
                     self._over   = False
                     self.pressed = False
-                    self.draw()
+                    self._draw()
                     return True
             if ev.type == MOUSEBUTTONDOWN and ev.button == 1 and self.collidepoint(ev.pos):
                 self.pressed = True
-                self.draw()
+                self._draw()
                 return True
             elif ev.type == MOUSEBUTTONUP and ev.button == 1 and self.collidepoint(ev.pos):
                 self.pressed = False
                 self.clicked   = True
                 self._switch = not self._switch
-                self.draw()
+                self._draw()
                 return True
             elif ev.type == ACTIVEEVENT and self._over:
                 self.pressed = False
                 self._over = False
-                self.draw()
+                self._draw()
                 return True
 
     def set(self,type=BUTTON,active=True,switch=False,switchlabel=None):
@@ -416,10 +422,10 @@ class Button(Rect,object):
         self.switchlabel = switchlabel if switchlabel != None else self.label
         if not hasattr(self,"_switch"): self._switch = switch
         if not hasattr(self,"_active"): self.active = active
-        else: self.draw()
+        else: self._draw()
 
-    def draw(self):
-        def draw(bgcolor,fgcolor,topleftcolor,bottomrightcolor):
+    def _draw(self):
+        def _draw(bgcolor,fgcolor,topleftcolor,bottomrightcolor):
             gfxdraw.box(DISPLAY,self,bgcolor)
             gfxdraw.vline(DISPLAY,self.left,self.top,self.bottom-1,topleftcolor)
             gfxdraw.hline(DISPLAY,self.left,self.right-1,self.top,topleftcolor)
@@ -436,19 +442,19 @@ class Button(Rect,object):
 
         DISPLAY.blit(self._bg,self)
         if not self.active:
-            draw(BGCOLOR,FGCOLOR,BORDER_LEFT,BORDER_RIGHT)
+            _draw(BGCOLOR,FGCOLOR,BORDER_LEFT,BORDER_RIGHT)
         elif self.pressed:
-            draw(BGHIGHTLIGHT,FGCOLOR,BORDER_RIGHT,BORDER_LEFT)
+            _draw(BGHIGHTLIGHT,FGCOLOR,BORDER_RIGHT,BORDER_LEFT)
         elif self._over:
             if self.type == SWITCH and self.switch:
-                draw(BGHIGHTLIGHT,FGCOLOR,BORDER_RIGHT,BORDER_LEFT)
+                _draw(BGHIGHTLIGHT,FGCOLOR,BORDER_RIGHT,BORDER_LEFT)
             else:
-                draw(BGHIGHTLIGHT,FGCOLOR,BORDER_LEFT,BORDER_RIGHT)
+                _draw(BGHIGHTLIGHT,FGCOLOR,BORDER_LEFT,BORDER_RIGHT)
         elif self.type == SWITCH and self.switch:
-            draw(BGCOLOR,FGCOLOR,BORDER_RIGHT,BORDER_LEFT)
+            _draw(BGCOLOR,FGCOLOR,BORDER_RIGHT,BORDER_LEFT)
             #draw(BORDER_LEFT,FGCOLOR,BORDER_RIGHT,BGCOLOR)
         else:
-            draw(BGCOLOR,FGCOLOR,BORDER_LEFT,BORDER_RIGHT)
+            _draw(BGCOLOR,FGCOLOR,BORDER_LEFT,BORDER_RIGHT)
         display.update(self)
 
     @property
@@ -464,7 +470,7 @@ class Button(Rect,object):
         if self._over and mouse.get_pressed()[0]:
             self.pressed = True
         if hasattr(self,"_bg"):
-            self.draw()
+            self._draw()
 
     @property
     def clicked(self):
@@ -481,6 +487,6 @@ class Button(Rect,object):
     @switch.setter
     def switch(self,value):
         self._switch = value
-        self.draw()
+        self._draw()
 
 
