@@ -26,7 +26,7 @@ def init():
     screen      = display.get_surface()
     if not screen: raise AttributeError('set video before init MenuSystem')
     screen_rect  = screen.get_rect()
-    DISPLAY=Surface((screen_rect.width,screen_rect.height))
+    DISPLAY=Surface((screen_rect.width,screen_rect.height),SRCALPHA).convert_alpha()
     DISPLAY.fill(Color(0,0,0,0))
     DISPLAYRECT  = DISPLAY.get_rect()
 
